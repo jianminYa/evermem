@@ -1,0 +1,27 @@
+这次我没有先删 `app.js` 那些导入状态逻辑，而是先修了更像根因的一处：  
+[web_ui/index.html](<D:/2026/march/mem0/mem0_local/web_ui/index.html:211>) 里的脚本加载从
+
+```html
+<script type="module" src="./app.js?..."></script>
+```
+
+改成了
+
+```html
+<script defer src="./app.js?..."></script>
+```
+
+原因很直接：你现在这种“页面静态内容在，但所有按钮都像没绑定事件”最像是 **JS 根本没执行**。而 `type="module"` 在很多 `file://` 直接打开本地 HTML 的场景里会被浏览器拦掉，这和你现在的现象完全一致。`app.js` 本身没有 `import/export`，所以没必要用 module。
+
+我也确认了：
+- `node --check web_ui\app.js` 通过
+- `app.js` 里没有 `import/export`
+
+你现在先做这一步：
+1. 彻底关掉当前页面标签页
+2. 重新打开 `web_ui/index.html`
+3. 先点 `暗黑模式`
+4. 再试 `加载仓库样例` 和手动导入
+
+这一步如果生效，说明之前不是 Docker，也不是那几个导入函数本身，而是浏览器没有执行模块脚本。  
+如果你重开后还是完全没反应，我下一步就直接按你的意思，把 `app.js` 末尾那段后来追加的导入状态覆盖函数整个删掉，回退到更简单的版本。

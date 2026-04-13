@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mind RAG Explorer</title>
+    <link rel="stylesheet" href="./styles.css?v=20260413a" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Mind Smoke / RAG Evaluation Explorer</p>
+          <h1>检索命中、模型回答、评测分数</h1>
+          <p class="hero-description">
+            面向 `mind_search_results*.json` 与 `evaluation_metrics*.json`
+            的快速审查页。重点是对比、溯源、定位失败样本。
+          </p>
+        </div>
+
+        <div class="hero-actions">
+          <button id="loadSampleBtn" class="primary-button" type="button">
+            加载仓库样例
+          </button>
+
+          <label class="file-pill">
+            导入 Search JSON
+            <input
+              id="searchFileInput"
+              type="file"
+              accept=".json,.gz,.json.gz,application/json,application/gzip,application/x-gzip"
+            />
+          </label>
+
+          <label class="file-pill">
+            导入 Metrics JSON
+            <input
+              id="metricsFileInput"
+              type="file"
+              accept=".json,.gz,.json.gz,application/json,application/gzip,application/x-gzip"
+            />
+          </label>
+
+          <label class="file-pill">
+            Import Dataset JSON
+            <input
+              id="datasetFileInput"
+              type="file"
+              accept=".json,.gz,.json.gz,application/json,application/gzip,application/x-gzip"
+            />
+          </label>
+
+          <label class="file-pill">
+            Import Build Trace
+            <input
+              id="buildTraceFileInput"
+              type="file"
+              accept=".json,.gz,.json.gz,application/json,application/gzip,application/x-gzip"
+            />
+          </label>
+
+          <button id="themeToggleBtn" class="ghost-button" type="button">
+            暗黑模式
+          </button>
+
+          <button id="openDrawerBtn" class="ghost-button" type="button">
+            查看原始 JSON
+          </button>
+        </div>
+
+        <div class="hero-meta">
+          <div id="loadStatus" class="hero-status">
+            尚未加载数据。可直接读取仓库样例，或手动选择两份 JSON。
+          </div>
+          <div id="importStatusGrid" class="import-status-grid"></div>
+          <div id="heroStats" class="hero-stats"></div>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <aside class="panel left-panel">
+          <section id="overviewPanel" class="panel-section compact"></section>
+
+          <section class="panel-section">
+            <div class="panel-title-row">
+              <div>
+                <p class="section-kicker">Filter</p>
+                <h2>筛选问题</h2>
+              </div>
+              <button id="resetFiltersBtn" class="ghost-button small" type="button">
+                重置
+              </button>
+            </div>
+
+            <label class="field">
+              <span>关键词</span>
+              <input
+                id="queryInput"
+                type="search"
+                placeholder="搜索 question / answer / response / speaker"
+              />
+            </label>
+
+            <div class="field-grid">
+              <label class="field">
+                <span>Group</span>
+                <select id="groupFilter"></select>
+              </label>
+
+              <label class="field">
+                <span>Category</span>
+                <select id="categoryFilter"></select>
+              </label>
+
+              <label class="field">
+                <span>状态</span>
+                <select id="statusFilter"></select>
+              </label>
+
+              <label class="field">
+                <span>排序</span>
+                <select id="sortFilter"></select>
+              </label>
+            </div>
+          </section>
+
+          <section class="panel-section list-shell">
+            <div class="panel-title-row">
+              <div>
+                <p class="section-kicker">Questions</p>
+                <h2>问题列表</h2>
+              </div>
+              <span id="visibleCountBadge" class="badge neutral">0 条</span>
+            </div>
+
+            <div id="questionList" class="question-list empty-state">
+              载入数据后，这里会显示可筛选的问题列表。
+            </div>
+          </section>
+        </aside>
+
+        <section class="panel middle-panel">
+          <section class="panel-section pane-shell">
+            <div class="panel-title-row">
+              <div>
+                <p class="section-kicker">Retrieval</p>
+                <h2>检索详情</h2>
+              </div>
+            </div>
+
+            <div id="retrievalPane" class="pane-body empty-state">
+              选择左侧问题后，在这里查看 `speaker_a / speaker_b` 的命中详情、
+              `episode / eventlog / rrf` 分布和证据支持度。
+            </div>
+          </section>
+        </section>
+
+        <aside class="panel right-panel">
+          <section class="panel-section pane-shell">
+            <div class="panel-title-row">
+              <div>
+                <p class="section-kicker">Answer & Metrics</p>
+                <h2>回答与评估</h2>
+              </div>
+
+              <button id="detailDrawerBtn" class="ghost-button small" type="button">
+                当前条目 JSON
+              </button>
+            </div>
+
+            <div id="detailPane" class="pane-body empty-state">
+              这里会展示指标卡、参考答案与模型回答的差异、响应时间，以及当前选中命中的元数据。
+            </div>
+          </section>
+        </aside>
+      </main>
+    </div>
+
+    <div id="drawerBackdrop" class="drawer-backdrop hidden"></div>
+
+    <aside id="rawDrawer" class="raw-drawer hidden" aria-hidden="true">
+      <div class="drawer-header">
+        <div>
+          <p class="section-kicker">Debug</p>
+          <h2>当前原始 JSON</h2>
+        </div>
+        <button id="closeDrawerBtn" class="ghost-button" type="button">
+          关闭
+        </button>
+      </div>
+
+      <div class="drawer-body">
+        <section class="json-card">
+          <div class="json-card-head">
+            <h3>当前条目</h3>
+            <span id="drawerItemHint" class="badge neutral">未选中</span>
+          </div>
+          <pre id="itemJson">暂无数据</pre>
+        </section>
+
+        <section class="json-card">
+          <div class="json-card-head">
+            <h3>当前命中</h3>
+            <span id="drawerHitHint" class="badge neutral">未选中</span>
+          </div>
+          <pre id="hitJson">暂无数据</pre>
+        </section>
+      </div>
+    </aside>
+
+    <div id="toastRoot" class="toast-root" aria-live="polite"></div>
+
+    <script defer src="./app.js?v=20260413b"></script>
+  </body>
+</html>
