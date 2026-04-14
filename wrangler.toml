@@ -1,5 +1,5 @@
 name = "evermem"
-main = "./_worker.js"
+main = "./worker-auth.js"
 compatibility_date = "2026-04-14"
 
 [assets]
