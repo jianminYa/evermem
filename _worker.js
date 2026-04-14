@@ -22,36 +22,44 @@ function unauthorized() {
   });
 }
 
-export async function onRequest(context) {
-  const basicUser = context.env.BASIC_USER || "admin";
-  const basicPass = context.env.BASIC_PASS;
-
-  if (!basicPass) {
-    return new Response("Password not configured", { status: 500 });
-  }
-
-  const authHeader = context.request.headers.get("Authorization");
+function parseBasicAuthHeader(authHeader) {
   if (!authHeader || !authHeader.startsWith("Basic ")) {
-    return unauthorized();
+    return null;
   }
 
-  let user = "";
-  let pass = "";
   try {
     const decoded = atob(authHeader.slice(6));
     const separatorIndex = decoded.indexOf(":");
     if (separatorIndex < 0) {
+      return null;
+    }
+    return {
+      user: decoded.slice(0, separatorIndex),
+      pass: decoded.slice(separatorIndex + 1),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export default {
+  async fetch(request, env) {
+    const basicUser = env.BASIC_USER || "admin";
+    const basicPass = env.BASIC_PASS;
+
+    if (!basicPass) {
+      return new Response("Password not configured", { status: 500 });
+    }
+
+    const auth = parseBasicAuthHeader(request.headers.get("Authorization"));
+    if (!auth) {
       return unauthorized();
     }
-    user = decoded.slice(0, separatorIndex);
-    pass = decoded.slice(separatorIndex + 1);
-  } catch {
-    return unauthorized();
-  }
 
-  if (!safeEqual(user, basicUser) || !safeEqual(pass, basicPass)) {
-    return unauthorized();
-  }
+    if (!safeEqual(auth.user, basicUser) || !safeEqual(auth.pass, basicPass)) {
+      return unauthorized();
+    }
 
-  return context.next();
-}
+    return env.ASSETS.fetch(request);
+  },
+};
